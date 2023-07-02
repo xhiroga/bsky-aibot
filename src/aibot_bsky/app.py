@@ -115,7 +115,10 @@ def does_post_have_mention(post: models.AppBskyFeedDefs.FeedViewPost, did: str) 
 
 def generate_reply(text):
     chat_completion = openai.ChatCompletion.create(
-        model="gpt-4", messages=[{"role": "user", "content": text}]
+        model="gpt-4", messages=[
+            {"role": "system", "content": 'Reply in 280 characters or less. No @mentions.'},
+            {"role": "user", "content": text}
+        ]
     )
     first = chat_completion.choices[0]
     return first.message.content
