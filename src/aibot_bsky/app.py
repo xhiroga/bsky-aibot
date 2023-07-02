@@ -136,8 +136,37 @@ def get_thread(client: Client, uri: str) -> 'models.AppBskyFeedDefs.FeedViewPost
     return client.bsky.feed.get_post_thread({"uri": uri})
 
 
-def thread_to_messages(thread: 'models.AppBskyFeedGetPostThread.Response') -> t.List[OpenAIMessage]:
-    pass
+def flatten_posts(thread: 'models.AppBskyFeedDefs.ThreadViewPost') -> t.List[t.Dict[str, any]]:
+    posts = [thread.get('post')]
+
+    # recursive case: if there is a parent, extend the list with posts from the parent
+    parent = thread.get('parent')
+    if parent is not None:
+        posts.extend(flatten_posts(parent))
+
+    return posts
+
+
+def posts_to_sorted_messages(posts: t.List[models.AppBskyFeedDefs.PostView], assistant_did: str) -> t.List[OpenAIMessage]:
+    def get_name(author: models.AppBskyActorDefs.ProfileViewBasic) -> str:
+        return author.get('displayName', author['handle'])
+
+    sorted_posts = sorted(posts, key=lambda post: post['indexedAt'])
+    messages = []
+    for post in sorted_posts:
+        if post['author']['did'] == assistant_did:
+            messages.append(OpenAIMessage(role='assistant', content=post['record']['text'], name=get_name(post['author'])))
+        else:
+            messages.append(OpenAIMessage(role='user', content=post['record']['text'], name=get_name(post['author'])))
+    return messages
+
+
+def thread_to_messages(thread: 'models.AppBskyFeedGetPostThread.Response', did: str) -> t.List[OpenAIMessage]:
+    if thread is None:
+        return []
+    posts = flatten_posts(thread.get('thread'))
+    messages = posts_to_sorted_messages(posts, did)
+    return messages
 
 
 def generate_reply(text):
@@ -182,6 +211,7 @@ def main():
         if mentioned or reply_to_me:
             # TODO: skip if not reply
             thread = get_thread(client, feed_view.post.uri)
+            messages = thread_to_messages(thread, profile.did)
             reply = generate_reply(feed_view.post.record.text)
             client.send_post(text=f"{reply}", reply_to=reply_to(feed_view.post))
             update_last_replied_datetime(feed_view.post.record.createdAt)
