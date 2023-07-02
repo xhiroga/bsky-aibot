@@ -17,6 +17,14 @@ openai.organization = os.environ.get("OPENAI_ORGANIZATION")
 openai.api_key = os.environ.get("OPENAI_API_KEY")
 
 
+class OpenAIMessage(t.TypedDict):
+    # <https://platform.openai.com/docs/api-reference/chat/create
+    role: str
+    content: t.Optional[str]
+    name: t.Optional[str]
+    function_call: t.Optional[t.Dict]
+
+
 def now():
     return datetime.now().isoformat()
 
@@ -100,7 +108,7 @@ def is_mention(feature: t.Dict[str, str], did: str) -> bool:
     )
 
 
-def does_post_have_mention(post: models.AppBskyFeedDefs.FeedViewPost, did: str) -> bool:
+def does_post_have_mention(post: models.AppBskyFeedDefs.PostView, did: str) -> bool:
     facets = post.record.facets
     if facets is None:
         return False
@@ -113,7 +121,27 @@ def does_post_have_mention(post: models.AppBskyFeedDefs.FeedViewPost, did: str) 
         )
 
 
+def is_reply_to_me(feed_view: models.AppBskyFeedDefs.FeedViewPost, did: str) -> bool:
+    reply = feed_view.reply
+    if reply is None:
+        return False
+    else:
+        if reply.parent.author.did == did:
+            return True
+        else:
+            return False
+
+
+def get_thread(client: Client, uri: str) -> 'models.AppBskyFeedDefs.FeedViewPost':
+    return client.bsky.feed.get_post_thread({"uri": uri})
+
+
+def thread_to_messages(thread: 'models.AppBskyFeedGetPostThread.Response') -> t.List[OpenAIMessage]:
+    pass
+
+
 def generate_reply(text):
+    # <https://platform.openai.com/docs/api-reference/chat/create>
     chat_completion = openai.ChatCompletion.create(
         model="gpt-4", messages=[
             {"role": "system", "content": 'Reply in 280 characters or less. No @mentions.'},
@@ -150,8 +178,10 @@ def main():
 
     for feed_view in new_feed:
         mentioned = does_post_have_mention(feed_view.post, profile.did)
-        if mentioned:
-            # TODO: Thread
+        reply_to_me = is_reply_to_me(feed_view.post, profile.did)
+        if mentioned or reply_to_me:
+            # TODO: skip if not reply
+            thread = get_thread(client, feed_view.post.uri)
             reply = generate_reply(feed_view.post.record.text)
             client.send_post(text=f"{reply}", reply_to=reply_to(feed_view.post))
             update_last_replied_datetime(feed_view.post.record.createdAt)

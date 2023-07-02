@@ -19,9 +19,13 @@ build-backend = "hatchling.build"
 
 [tool.rye]
 managed = true
+dev-dependencies = [
+    "pytest~=7.4.0",
+]
 
 [tool.hatch.metadata]
 allow-direct-references = true
 
 [tool.rye.scripts]
 app = { cmd = "python ./src/aibot_bsky/app.py" }
+test = { cmd = "pytest" }
