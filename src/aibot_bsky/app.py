@@ -8,11 +8,6 @@ from atproto import Client
 from atproto.xrpc_client import models
 from dotenv import load_dotenv
 
-from dataclasses import dataclass
-
-from atproto.xrpc_client.models import base
-
-
 load_dotenv(verbose=True)
 
 HANDLE = os.getenv("HANDLE")
