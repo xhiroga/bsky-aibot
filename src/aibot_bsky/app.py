@@ -49,9 +49,7 @@ def follow(client: Client, subject: str):
         "subject": subject,
         "createdAt": now(),
     }
-    response = client.bsky._client.invoke_procedure(
-        "app.bsky.graph.follow", data=data_model, input_encoding="application/json"
-    )
+    response = client.bsky._client.invoke_procedure("app.bsky.graph.follow", data=data_model, input_encoding="application/json")
     print(response)
 
 
@@ -60,29 +58,25 @@ def follow_back(
     followers: t.List["models.AppBskyActorDefs.ProfileView"],
     follows: t.List["models.AppBskyActorDefs.ProfileView"],
 ):
-    not_followed_yet = [
-        follower
-        for follower in followers
-        if follower.did not in [follow.did for follow in follows]
-    ]
+    not_followed_yet = [follower for follower in followers if follower.did not in [follow.did for follow in follows]]
     for follower in not_followed_yet:
         follow(client, follower.did)
 
 
 def get_last_replied_datetime() -> str:
     if os.path.exists(LAST_REPLIED_DATETIME_FILE):
-        with open(LAST_REPLIED_DATETIME_FILE, 'r') as f:
+        with open(LAST_REPLIED_DATETIME_FILE, "r") as f:
             return f.read().strip()
     else:
         return None
 
 
 def update_last_replied_datetime(datetime_iso8601: str):
-    with open(LAST_REPLIED_DATETIME_FILE, 'w') as f:
+    with open(LAST_REPLIED_DATETIME_FILE, "w") as f:
         f.write(datetime_iso8601)
 
 
-def get_timeline(client: Client) -> 'models.AppBskyFeedGetTimeline.Response':
+def get_timeline(client: Client) -> "models.AppBskyFeedGetTimeline.Response":
     # TODO: cursor
     return client.bsky.feed.get_timeline({"algorithm": "reverse-chronological"})
 
@@ -95,7 +89,7 @@ def is_seen(post: models.AppBskyFeedDefs.PostView, last_replied_datetime: t.Unio
         return seen
 
 
-def filter_and_sort_timeline(feed: t.List['models.AppBskyFeedDefs.FeedViewPost'], last_replied_datetime: t.Union[str, None]) -> t.List['models.AppBskyFeedDefs.FeedViewPost']:
+def filter_and_sort_timeline(feed: t.List["models.AppBskyFeedDefs.FeedViewPost"], last_replied_datetime: t.Union[str, None]) -> t.List["models.AppBskyFeedDefs.FeedViewPost"]:
     # keep only unseen posts and sort by createdAt asc
     filtered_feed = [feed_view for feed_view in feed if is_seen(feed_view.post, last_replied_datetime)]
     sorted_feed = sorted(filtered_feed, key=lambda feed_view: feed_view.post.record.createdAt)
@@ -103,9 +97,7 @@ def filter_and_sort_timeline(feed: t.List['models.AppBskyFeedDefs.FeedViewPost']
 
 
 def is_mention(feature: t.Dict[str, str], did: str) -> bool:
-    return (
-        feature["_type"] == "app.bsky.richtext.facet#mention" and feature["did"] == did
-    )
+    return feature["_type"] == "app.bsky.richtext.facet#mention" and feature["did"] == did
 
 
 def does_post_have_mention(post: models.AppBskyFeedDefs.PostView, did: str) -> bool:
@@ -113,12 +105,7 @@ def does_post_have_mention(post: models.AppBskyFeedDefs.PostView, did: str) -> b
     if facets is None:
         return False
     else:
-        return any(
-            [
-                any([is_mention(feature, did) for feature in facet.features])
-                for facet in facets
-            ]
-        )
+        return any([any([is_mention(feature, did) for feature in facet.features]) for facet in facets])
 
 
 def is_reply_to_me(feed_view: models.AppBskyFeedDefs.FeedViewPost, did: str) -> bool:
@@ -132,50 +119,51 @@ def is_reply_to_me(feed_view: models.AppBskyFeedDefs.FeedViewPost, did: str) -> 
             return False
 
 
-def get_thread(client: Client, uri: str) -> 'models.AppBskyFeedDefs.FeedViewPost':
+def get_thread(client: Client, uri: str) -> "models.AppBskyFeedDefs.FeedViewPost":
     return client.bsky.feed.get_post_thread({"uri": uri})
 
 
-def flatten_posts(thread: 'models.AppBskyFeedDefs.ThreadViewPost') -> t.List[t.Dict[str, any]]:
-    posts = [thread.get('post')]
+def flatten_posts(thread: "models.AppBskyFeedDefs.ThreadViewPost") -> t.List[t.Dict[str, any]]:
+    posts = [thread.post]
 
     # recursive case: if there is a parent, extend the list with posts from the parent
-    parent = thread.get('parent')
+    parent = thread.parent
     if parent is not None:
         posts.extend(flatten_posts(parent))
 
     return posts
 
 
-def posts_to_sorted_messages(posts: t.List[models.AppBskyFeedDefs.PostView], assistant_did: str) -> t.List[OpenAIMessage]:
-    def get_name(author: models.AppBskyActorDefs.ProfileViewBasic) -> str:
-        return author.get('displayName', author['handle'])
+def get_oepnai_chat_message_name(name: str) -> str:
+    # should be '^[a-zA-Z0-9_-]{1,64}$'
+    return name.replace(".", "_")
 
-    sorted_posts = sorted(posts, key=lambda post: post['indexedAt'])
+
+def posts_to_sorted_messages(posts: t.List[models.AppBskyFeedDefs.PostView], assistant_did: str) -> t.List[OpenAIMessage]:
+    sorted_posts = sorted(posts, key=lambda post: post.indexedAt)
     messages = []
     for post in sorted_posts:
-        if post['author']['did'] == assistant_did:
-            messages.append(OpenAIMessage(role='assistant', content=post['record']['text'], name=get_name(post['author'])))
-        else:
-            messages.append(OpenAIMessage(role='user', content=post['record']['text'], name=get_name(post['author'])))
+        role = "assistant" if post.author.did == assistant_did else "user"
+        messages.append(OpenAIMessage(role=role, content=post.record.text, name=get_oepnai_chat_message_name(post.author.handle)))
+        messages.append(OpenAIMessage(role="user", content=post.record.text, name=get_oepnai_chat_message_name(post.author.handle)))
     return messages
 
 
-def thread_to_messages(thread: 'models.AppBskyFeedGetPostThread.Response', did: str) -> t.List[OpenAIMessage]:
+def thread_to_messages(thread: "models.AppBskyFeedGetPostThread.Response", did: str) -> t.List[OpenAIMessage]:
     if thread is None:
         return []
-    posts = flatten_posts(thread.get('thread'))
+    posts = flatten_posts(thread.thread)
     messages = posts_to_sorted_messages(posts, did)
     return messages
 
 
-def generate_reply(text):
+def generate_reply(post_messages: t.List[OpenAIMessage]):
     # <https://platform.openai.com/docs/api-reference/chat/create>
+    messages = [{"role": "system", "content": "Reply in 280 characters or less. No @mentions."}]
+    messages.extend(post_messages)
     chat_completion = openai.ChatCompletion.create(
-        model="gpt-4", messages=[
-            {"role": "system", "content": 'Reply in 280 characters or less. No @mentions.'},
-            {"role": "user", "content": text}
-        ]
+        model="gpt-4",
+        messages=messages,
     )
     first = chat_completion.choices[0]
     return first.message.content
@@ -207,12 +195,12 @@ def main():
 
     for feed_view in new_feed:
         mentioned = does_post_have_mention(feed_view.post, profile.did)
-        reply_to_me = is_reply_to_me(feed_view.post, profile.did)
+        reply_to_me = is_reply_to_me(feed_view, profile.did)
         if mentioned or reply_to_me:
             # TODO: skip if not reply
             thread = get_thread(client, feed_view.post.uri)
-            messages = thread_to_messages(thread, profile.did)
-            reply = generate_reply(feed_view.post.record.text)
+            post_messages = thread_to_messages(thread, profile.did)
+            reply = generate_reply(post_messages)
             client.send_post(text=f"{reply}", reply_to=reply_to(feed_view.post))
             update_last_replied_datetime(feed_view.post.record.createdAt)
 
