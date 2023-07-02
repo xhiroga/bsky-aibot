@@ -8,6 +8,8 @@ from atproto import Client
 from atproto.xrpc_client import models
 from dotenv import load_dotenv
 
+from atproto.xrpc_client.models import ids
+
 load_dotenv(verbose=True)
 
 HANDLE = os.getenv("HANDLE")
@@ -45,13 +47,27 @@ def get_follows(client: Client, handle: str):
     return response.follows
 
 
+def follow(client: Client, did: str, subject: str):
+    response = client.com.atproto.repo.create_record(models.ComAtprotoRepoCreateRecord.Data(
+                repo=did,
+                collection=ids.AppBskyGraphFollow,
+                record=models.AppBskyGraphFollow.Main(
+                    createdAt=now(),
+                    subject=subject,
+                ),
+            ))
+    print(response)
+
+
 def follow_back(
     client: Client,
+    did: str,
     followers: t.List["models.AppBskyActorDefs.ProfileView"],
     follows: t.List["models.AppBskyActorDefs.ProfileView"],
 ):
-    # No follow API found in document.
-    pass
+    not_followed_yet = [follower for follower in followers if follower.did not in [follow.did for follow in follows]]
+    for follower in not_followed_yet:
+        follow(client, did, follower.did)
 
 
 def get_last_replied_datetime() -> str:
@@ -174,6 +190,10 @@ def reply_to(post):
 def main():
     client = Client()
     profile = client.login(HANDLE, PASSWORD)
+
+    bot_followers = get_followers(client, HANDLE)
+    bot_follows = get_follows(client, HANDLE)
+    follow_back(client, profile.did, bot_followers, bot_follows)
 
     timeline = get_timeline(client)
     # should check with latest reply, not last replied datetime
