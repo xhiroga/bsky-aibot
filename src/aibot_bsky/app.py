@@ -1,10 +1,17 @@
 import os
+import time
 import typing as t
 from datetime import datetime
+
 import openai
 from atproto import Client
 from atproto.xrpc_client import models
 from dotenv import load_dotenv
+
+from dataclasses import dataclass
+
+from atproto.xrpc_client.models import base
+
 
 load_dotenv(verbose=True)
 
@@ -43,24 +50,13 @@ def get_follows(client: Client, handle: str):
     return response.follows
 
 
-def follow(client: Client, subject: str):
-    # <https://atproto.com/lexicons/app-bsky-graph#appbskygraphfollow>
-    data_model = {
-        "subject": subject,
-        "createdAt": now(),
-    }
-    response = client.bsky._client.invoke_procedure("app.bsky.graph.follow", data=data_model, input_encoding="application/json")
-    print(response)
-
-
 def follow_back(
     client: Client,
     followers: t.List["models.AppBskyActorDefs.ProfileView"],
     follows: t.List["models.AppBskyActorDefs.ProfileView"],
 ):
-    not_followed_yet = [follower for follower in followers if follower.did not in [follow.did for follow in follows]]
-    for follower in not_followed_yet:
-        follow(client, follower.did)
+    # No follow API found in document.
+    pass
 
 
 def get_last_replied_datetime() -> str:
@@ -159,7 +155,7 @@ def thread_to_messages(thread: "models.AppBskyFeedGetPostThread.Response", did: 
 
 def generate_reply(post_messages: t.List[OpenAIMessage]):
     # <https://platform.openai.com/docs/api-reference/chat/create>
-    messages = [{"role": "system", "content": "Reply in 280 characters or less. No @mentions."}]
+    messages = [{"role": "system", "content": "Reply friendly in 280 characters or less. No @mentions."}]
     messages.extend(post_messages)
     chat_completion = openai.ChatCompletion.create(
         model="gpt-4",
@@ -184,12 +180,8 @@ def main():
     client = Client()
     profile = client.login(HANDLE, PASSWORD)
 
-    bot_followers = get_followers(client, HANDLE)
-    bot_follows = get_follows(client, HANDLE)
-
-    follow_back(client, bot_followers, bot_follows)
-
     timeline = get_timeline(client)
+    # should check with latest reply, not last replied datetime
     last_replied_datetime = get_last_replied_datetime()
     new_feed = filter_and_sort_timeline(timeline.feed, last_replied_datetime)
 
@@ -197,14 +189,19 @@ def main():
         mentioned = does_post_have_mention(feed_view.post, profile.did)
         reply_to_me = is_reply_to_me(feed_view, profile.did)
         if mentioned or reply_to_me:
-            # TODO: skip if not reply
-            thread = get_thread(client, feed_view.post.uri)
-            post_messages = thread_to_messages(thread, profile.did)
+            if reply_to_me:
+                thread = get_thread(client, feed_view.post.uri)
+                post_messages = thread_to_messages(thread, profile.did)
+            else:
+                post_messages = posts_to_sorted_messages([feed_view.post], profile.did)
             reply = generate_reply(post_messages)
             client.send_post(text=f"{reply}", reply_to=reply_to(feed_view.post))
             update_last_replied_datetime(feed_view.post.record.createdAt)
 
 
 if __name__ == "__main__":
-    # TODO: loop main() with 30 seconds interval
-    main()
+    # TODO: Keep token.
+    while True:
+        main()
+        print("Sleeping for 30 seconds...")
+        time.sleep(30)
