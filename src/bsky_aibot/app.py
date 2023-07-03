@@ -69,7 +69,7 @@ def flatten_posts(thread: "models.AppBskyFeedDefs.ThreadViewPost") -> t.List[t.D
     return posts
 
 
-def get_oepnai_chat_message_name(name: str) -> str:
+def get_openai_chat_message_name(name: str) -> str:
     # should be '^[a-zA-Z0-9_-]{1,64}$'
     return name.replace(".", "_")
 
@@ -79,7 +79,7 @@ def posts_to_sorted_messages(posts: t.List[models.AppBskyFeedDefs.PostView], ass
     messages = []
     for post in sorted_posts:
         role = "assistant" if post.author.did == assistant_did else "user"
-        messages.append(OpenAIMessage(role=role, content=post.record.text, name=get_oepnai_chat_message_name(post.author.handle)))
+        messages.append(OpenAIMessage(role=role, content=post.record.text, name=get_openai_chat_message_name(post.author.handle)))
     return messages
 
 
