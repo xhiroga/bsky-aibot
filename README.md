@@ -1,4 +1,6 @@
-# aibot-bsky
+# [@aibot.bsky.social](https://bsky.app/profile/aibot.bsky.social)
+
+[![ai](./public/icons/ai_white_bg.png)](https://bsky.app/profile/aibot.bsky.social)
 
 ```shell
 rye sync
