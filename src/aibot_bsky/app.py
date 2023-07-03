@@ -1,20 +1,18 @@
 import os
 import time
 import typing as t
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 import openai
 from atproto import Client
 from atproto.xrpc_client import models
+from dateutil.parser import parse
 from dotenv import load_dotenv
 
 load_dotenv(verbose=True)
 
 HANDLE = os.getenv("HANDLE")
 PASSWORD = os.getenv("PASSWORD")
-
-LAST_REPLIED_DATETIME_FILE = "./last_replied_datetime.txt"
-
 openai.organization = os.environ.get("OPENAI_ORGANIZATION")
 openai.api_key = os.environ.get("OPENAI_API_KEY")
 
@@ -27,11 +25,6 @@ class OpenAIMessage(t.TypedDict):
     function_call: t.Optional[t.Dict]
 
 
-def get_unread_count(client: Client) -> int:
-    response = client.bsky.notification.get_unread_count()
-    return response.count
-
-
 def get_notifications(client: Client):
     response = client.bsky.notification.list_notifications()
     return response.notifications
@@ -42,8 +35,13 @@ def update_seen(client: Client, seenAt: str = datetime.now().isoformat()):
     return
 
 
-def filter_mentions_and_replies_from_notifications(ns: t.List['models.AppBskyNotificationListNotifications.Notification']) -> t.List[models.AppBskyNotificationListNotifications.Notification]:
+def filter_mentions_and_replies_from_notifications(ns: t.List["models.AppBskyNotificationListNotifications.Notification"]) -> t.List[models.AppBskyNotificationListNotifications.Notification]:
     return [n for n in ns if n.reason in ("mention", "reply")]
+
+
+def filter_unread_notifications(ns: t.List["models.AppBskyNotificationListNotifications.Notification"], seen_at: datetime) -> t.List["models.AppBskyNotificationListNotifications.Notification"]:
+    # IndexされてからNotificationで取得できるまでにラグがあるので、最後に見た時刻より少し前ににIndexされたものから取得する
+    return [n for n in ns if seen_at - timedelta(minutes=2) < parse(n.indexedAt)]
 
 
 def get_thread(client: Client, uri: str) -> "models.AppBskyFeedDefs.FeedViewPost":
@@ -116,33 +114,45 @@ def reply_to(notification: models.AppBskyNotificationListNotifications.Notificat
         return {"root": notification.record.reply.root, "parent": parent}
 
 
-def main():
-    client = Client()
-    profile = client.login(HANDLE, PASSWORD)
+def read_notifications_and_reply(client: Client, last_seen_at: datetime = None) -> datetime:
+    print(f"last_seen_at: {last_seen_at}")
+    did = client.me.did
 
-    unread_count = get_unread_count(client)
-    if unread_count == 0:
-        print("No unread notifications.")
-        return
-
-    ns = filter_mentions_and_replies_from_notifications(get_notifications(client))
+    # unread countで判断するアプローチは、たまたまbsky.appで既読をつけてしまった場合に弱い
+    ns = get_notifications(client)
+    seen_at = datetime.now(tz=timezone.utc)
+    ns = filter_mentions_and_replies_from_notifications(ns)
+    if last_seen_at is not None:
+        ns = filter_unread_notifications(ns, last_seen_at)
 
     for notification in ns:
         thread = get_thread(client, notification.uri)
-        if is_already_replied_to(thread, profile.did):
+        if is_already_replied_to(thread, did):
             print(f"Already replied to {notification.uri}")
             continue
 
-        post_messages = thread_to_messages(thread, profile.did)
+        post_messages = thread_to_messages(thread, did)
         reply = generate_reply(post_messages)
         client.send_post(text=f"{reply}", reply_to=reply_to(notification))
 
     update_seen(client)
+    return seen_at
+
+
+def main():
+    client = Client()
+    client.login(HANDLE, PASSWORD)
+    seen_at = None
+    while True:
+        try:
+            # CANNOT OVERRIDE seen_at....
+            seen_at = read_notifications_and_reply(client, seen_at)
+        except Exception as e:
+            print(e)
+            client.login(HANDLE, PASSWORD)
+        finally:
+            time.sleep(10)
 
 
 if __name__ == "__main__":
-    # TODO: Keep token.
-    while True:
-        main()
-        print("Sleeping for 30 seconds...")
-        time.sleep(30)
+    main()
