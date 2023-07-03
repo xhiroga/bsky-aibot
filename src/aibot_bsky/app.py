@@ -2,6 +2,7 @@ import os
 import time
 import typing as t
 from datetime import datetime, timedelta, timezone
+import logging
 
 import openai
 from atproto import Client
@@ -11,6 +12,8 @@ from dotenv import load_dotenv
 
 load_dotenv(verbose=True)
 
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+
 HANDLE = os.getenv("HANDLE")
 PASSWORD = os.getenv("PASSWORD")
 openai.organization = os.environ.get("OPENAI_ORGANIZATION")
@@ -18,7 +21,6 @@ openai.api_key = os.environ.get("OPENAI_API_KEY")
 
 
 class OpenAIMessage(t.TypedDict):
-    # <https://platform.openai.com/docs/api-reference/chat/create
     role: str
     content: t.Optional[str]
     name: t.Optional[str]
@@ -60,7 +62,6 @@ def is_already_replied_to(feed_view: models.AppBskyFeedDefs.FeedViewPost, did: s
 def flatten_posts(thread: "models.AppBskyFeedDefs.ThreadViewPost") -> t.List[t.Dict[str, any]]:
     posts = [thread.post]
 
-    # recursive case: if there is a parent, extend the list with posts from the parent
     parent = thread.parent
     if parent is not None:
         posts.extend(flatten_posts(parent))
@@ -102,7 +103,6 @@ def generate_reply(post_messages: t.List[OpenAIMessage]):
     return first.message.content
 
 
-# 返り値の型に自信なし
 def reply_to(notification: models.AppBskyNotificationListNotifications.Notification) -> t.Union[models.AppBskyFeedPost.ReplyRef, models.AppBskyFeedDefs.ReplyRef]:
     parent = {
         "cid": notification.cid,
@@ -115,7 +115,7 @@ def reply_to(notification: models.AppBskyNotificationListNotifications.Notificat
 
 
 def read_notifications_and_reply(client: Client, last_seen_at: datetime = None) -> datetime:
-    print(f"last_seen_at: {last_seen_at}")
+    logging.info(f"last_seen_at: {last_seen_at}")
     did = client.me.did
 
     # unread countで判断するアプローチは、たまたまbsky.appで既読をつけてしまった場合に弱い
@@ -128,7 +128,7 @@ def read_notifications_and_reply(client: Client, last_seen_at: datetime = None) 
     for notification in ns:
         thread = get_thread(client, notification.uri)
         if is_already_replied_to(thread, did):
-            print(f"Already replied to {notification.uri}")
+            logging.info(f"Already replied to {notification.uri}")
             continue
 
         post_messages = thread_to_messages(thread, did)
@@ -145,10 +145,9 @@ def main():
     seen_at = None
     while True:
         try:
-            # CANNOT OVERRIDE seen_at....
             seen_at = read_notifications_and_reply(client, seen_at)
         except Exception as e:
-            print(e)
+            logging.exception(f"An error occurred: ${e}")
             client.login(HANDLE, PASSWORD)
         finally:
             time.sleep(10)
