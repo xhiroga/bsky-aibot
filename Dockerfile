@@ -17,4 +17,4 @@ RUN pip install -r requirements.txt
 
 RUN pip install .
 
-CMD ["python3", "./src/aibot_bsky/app.py"]
+CMD ["python3", "./src/bsky_aibot/app.py"]

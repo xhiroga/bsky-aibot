@@ -28,5 +28,5 @@ dev-dependencies = [
 allow-direct-references = true
 
 [tool.rye.scripts]
-app = { cmd = "python ./src/aibot_bsky/app.py" }
+app = { cmd = "python ./src/bsky_aibot/app.py" }
 test = { cmd = "pytest" }

@@ -1,6 +1,6 @@
 import pytest
 
-from aibot_bsky.app import (filter_mentions_and_replies_from_notifications,
+from bsky_aibot.app import (filter_mentions_and_replies_from_notifications,
                             thread_to_messages)
 
 
