@@ -148,6 +148,7 @@ def main():
             seen_at = read_notifications_and_reply(client, seen_at)
         except Exception as e:
             logging.exception(f"An error occurred: ${e}")
+            time.sleep(300)
             client.login(HANDLE, PASSWORD)
         finally:
             time.sleep(10)
