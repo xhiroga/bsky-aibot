@@ -118,9 +118,10 @@ def read_notifications_and_reply(client: Client, last_seen_at: datetime = None) 
     logging.info(f"last_seen_at: {last_seen_at}")
     did = client.me.did
 
+    seen_at = datetime.now(tz=timezone.utc)
+
     # unread countで判断するアプローチは、たまたまbsky.appで既読をつけてしまった場合に弱い
     ns = get_notifications(client)
-    seen_at = datetime.now(tz=timezone.utc)
     ns = filter_mentions_and_replies_from_notifications(ns)
     if last_seen_at is not None:
         ns = filter_unread_notifications(ns, last_seen_at)
