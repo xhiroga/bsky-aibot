@@ -32,8 +32,8 @@ def get_notifications(client: Client):
     return response.notifications
 
 
-def update_seen(client: Client, seenAt: str = datetime.now().isoformat()):
-    response = client.bsky.notification.update_seen({"seenAt": seenAt})
+def update_seen(client: Client, seenAt: datetime):
+    response = client.bsky.notification.update_seen({"seenAt": seenAt.isoformat()})
     return
 
 
@@ -136,7 +136,7 @@ def read_notifications_and_reply(client: Client, last_seen_at: datetime = None) 
         reply = generate_reply(post_messages)
         client.send_post(text=f"{reply}", reply_to=reply_to(notification))
 
-    update_seen(client)
+    update_seen(client, seen_at)
     return seen_at
 
 
