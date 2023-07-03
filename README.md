@@ -15,4 +15,4 @@ docker compose up --build
 
 ## License
 
-Icons made by [Freepik](https://www.flaticon.com/authors/freepik) from [www.flaticon.com](https://www.flaticon.com/)
+Icons made by [Freepik](https://www.flaticon.com/authors/freepik) from [flaticon.com](https://www.flaticon.com/free-icon/ai_2814666?term=ai)
