@@ -8,5 +8,5 @@ rye run app
 or
 
 ```shell
-docker-compose up --build
+docker compose up --build
 ```

@@ -9,6 +9,7 @@ dependencies = [
     "atproto~=0.0.16",
     "python-dotenv~=1.0.0",
     "openai~=0.27.8",
+    "python-dateutil~=2.8.2",
 ]
 readme = "README.md"
 requires-python = ">= 3.8"
