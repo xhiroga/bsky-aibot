@@ -1,8 +1,9 @@
+import logging
 import os
+import sys
 import time
 import typing as t
 from datetime import datetime, timedelta, timezone
-import logging
 
 import openai
 from atproto import Client
@@ -140,17 +141,33 @@ def read_notifications_and_reply(client: Client, last_seen_at: datetime = None) 
     return seen_at
 
 
+def login(client: Client, initial_wait: int):
+    sleep_duration = initial_wait
+    max_sleep_duration = 3600  # 1 hour
+
+    while True:
+        try:
+            client.login(HANDLE, PASSWORD)
+            return  # if login is successful, exit the loop
+        except Exception as e:
+            logging.exception(f"An error occurred during login: {e}")
+            if sleep_duration > max_sleep_duration:  # if sleep duration has reached the max, exit the system
+                logging.error("Max sleep duration reached, exiting system.")
+                sys.exit(1)
+            time.sleep(sleep_duration)
+            sleep_duration *= 2  # double the sleep duration on failure
+
+
 def main():
     client = Client()
-    client.login(HANDLE, PASSWORD)
+    login(client, initial_wait=1)
     seen_at = None
     while True:
         try:
             seen_at = read_notifications_and_reply(client, seen_at)
         except Exception as e:
-            logging.exception(f"An error occurred: ${e}")
-            time.sleep(300)
-            client.login(HANDLE, PASSWORD)
+            logging.exception(f"An error occurred: {e}")
+            login(client, initial_wait=60)
         finally:
             time.sleep(10)
 
