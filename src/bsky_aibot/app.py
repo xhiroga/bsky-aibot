@@ -127,6 +127,10 @@ def read_notifications_and_reply(client: Client, last_seen_at: datetime = None) 
     if last_seen_at is not None:
         ns = filter_unread_notifications(ns, last_seen_at)
 
+    if (len(ns) == 0):
+        logging.info("No unread notifications")  # avoid to call update_seen unnecessarily.
+        return seen_at
+
     for notification in ns:
         thread = get_thread(client, notification.uri)
         if is_already_replied_to(thread, did):
